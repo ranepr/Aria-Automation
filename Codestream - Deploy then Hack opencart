@@ -1,0 +1,97 @@
+---
+project: Field Demo
+kind: PIPELINE
+name: Deploy then Hack Opencart
+icon: organization,left, is-error
+enabled: true
+global: false
+concurrency: 10
+workspace:
+  type: DOCKER
+  endpoint: ''
+  image: ''
+  registry: ''
+  path: ''
+  autoCloneForTrigger: false
+  limits:
+    cpu: 1.0
+    memory: 512
+stageOrder:
+- Deploy Initial OpenCart App
+- Hack OpenCart eCom App
+- User Testing Website Remediation
+stages:
+  Deploy Initial OpenCart App:
+    taskOrder:
+    - Deploy OpenCart
+    tasks:
+      Deploy OpenCart:
+        type: Blueprint
+        input:
+          action: CreateDeployment
+          deploymentName: OpenCart-eCom
+          blueprint: Load-Balanced-OpenCart
+          version: '3.7'
+          parameters:
+            image: ubuntu
+            password: VMware1!
+            size: small
+            clusterSize: small
+            username: demouser
+  User Testing Website Remediation:
+    taskOrder:
+    - User Test
+    tasks:
+      User Test:
+        type: UserOperation
+        input:
+          approvers:
+          - administrator@corp.local
+          - administrator
+          - configadmin
+          approverGroups: [
+            ]
+          summary: Test eCom Website
+          description: Approve or Reject eCom Website
+          sendemail: false
+          expiration: 3
+          expirationUnit: DAYS
+          pipelineName: ${name}
+          cancelPreviousPendingUserOp: false
+  Hack OpenCart eCom App:
+    taskOrder:
+    - Hacking Approval
+    - Hack OpenCart
+    tasks:
+      Hack OpenCart:
+        type: SSH
+        input:
+          script: |-
+            git clone https://github.com/ranepr/Websample
+            cd Websample
+            mv hacked-website.php /var/www/opencart/index.php
+          username: root
+          password: VMware1!
+          passphrase: ''
+          privatekey: ''
+          host: ${Deploy Initial OpenCart App.Deploy OpenCart.output.deploymentDetails.resources['FRONTEND[0]'].address}
+          arguments: [
+            ]
+          environmentVariables: {
+            }
+      Hacking Approval:
+        type: UserOperation
+        input:
+          approvers:
+          - administrator@corp.local
+          - administrator
+          - configadmin
+          approverGroups: [
+            ]
+          summary: Test Ecom Application Deployment
+          description: Approve or Reject deplopyment.
+          sendemail: false
+          expiration: 3
+          expirationUnit: DAYS
+          pipelineName: ${name}
+          cancelPreviousPendingUserOp: false
