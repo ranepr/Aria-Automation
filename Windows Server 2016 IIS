@@ -1,0 +1,118 @@
+formatVersion: 1
+inputs:
+  username:
+    type: string
+    title: Username
+    description: Please input OS Local Username
+    default: cloud
+  password:
+    type: string
+    title: Password
+    description: Please input OS Local User password
+    encrypted: true
+    pattern: '[a-z0-9A-Z@#$]+'
+    default: P@ssw0rd
+  env:
+    type: string
+    title: Environment
+    description: 'Please specify the Machine environment: Management, Production, Development, QA'
+    default: prod
+    oneOf:
+      - title: Production
+        const: prod
+  flavor:
+    type: string
+    title: Size
+    description: 'Please select VM Size: Small (2 CPU, 4 GB RAM), Medium (4 CPU, 8 GB RAM), Large (4 CPU, 16 GB RAM)'
+    default: small-windows
+    enum:
+      - small-windows
+      - medium-windows
+      - large-windows
+  inbound:
+    type: string
+    title: Inbound Port
+    description: 'Please input inbound port to be opened (ex: 80,443)'
+    default: 80,443
+    pattern: ^\d*(\d,\d+)*$
+  outbound:
+    type: string
+    title: Outbound Port
+    description: 'Please input outbound port to be opened (ex: 80,443)'
+    default: 80,443
+    pattern: ^\d*(\d,\d+)*$
+  #  oucontainer:
+  #    type: object
+  #    title: Organization Unit
+  #    $data: 'vro/data/inventory/AD:OrganizationalUnit' 
+  #    properties:
+  #      id:
+  #        type: string
+  #      type:
+  #        type: string
+  install7zip:
+    type: boolean
+    title: Install Zip
+resources:
+  SG:
+    type: Cloud.SecurityGroup
+    properties:
+      securityGroupType: new
+      rules: '${input.outbound == "" ? input.inbound == "" ? [] : [{"name": "allowedInbound", "ports": input.inbound, "access": "Allow", "protocol": "TCP", "direction": "inbound", "source": "ANY"}] : input.inbound == "" ? [{"name": "allowedOutbound", "ports": input.outbound, "access": "Allow", "protocol": "TCP", "direction": "outbound", "destination": "ANY"}] : [{"name": "allowedInbound", "ports": input.inbound, "access": "Allow", "protocol": "TCP", "direction": "inbound", "source": "ANY"}] + [{"name": "allowedOutbound", "ports": input.outbound, "access": "Allow", "protocol": "TCP", "direction": "outbound", "destination": "ANY"}]}'
+  VM:
+    type: Cloud.Machine
+    properties:
+      image: windows
+      customizeGuestOs: false
+      flavor: ${input.flavor}
+      constraints:
+        - tag: env:${input.env}
+      networks:
+        - network: ${resource.NET.id}
+          assignment: static
+          securityGroups:
+            - ${resource.SG.id}
+      cloudConfig: |
+        #cloud-config
+        write_files:
+          content: |
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Set-ExecutionPolicy -ExecutionPolicy Unrestricted -Scope CurrentUser; Invoke-WebRequest https://repo.saltproject.io/windows/Salt-Minion-3005-1-Py3-AMD64-Setup.exe -UseBasicParsing -OutFile C:\Temp\minion.exe
+          path: C:\Temp\minion.ps1
+
+        set_hostname: ${to_upper(self.resourceName)}
+
+        groups:
+          - Cloud-Operators
+
+        users:
+          - 
+            name: ${input.username}
+            gecos: 'Cloud Operator'
+            groups: administrators
+            passwd: ${input.password}
+            inactive: False
+
+        runcmd:
+          - 'powershell.exe New-NetIpAddress -InterfaceAlias Ethernet0 -IPAddress ${self.networks[0].address} -PrefixLength ${resource.NET.prefixLength} -DefaultGateway ${self.networks[0].gateway}'
+          - 'netsh interface ip set dns name="Ethernet0" static ${propgroup.netconfig.dns}'
+          - 'powershell.exe Start-Sleep -s 30'
+          
+          - 'netdom join ${to_upper(self.resourceName)} /domain:${propgroup.netconfig.domain} /userd:${propgroup.domainadmin.username} /passwordd: ${propgroup.domainadmin.password} /reboot'
+          - 'powershell.exe Add-LocalGroupMember -Group "Administrators" -Member "${propgroup.netconfig.domain}\${env.requestedBy}"'
+          - 'powershell.exe Add-LocalGroupMember -Group "Cloud-Operators" -Member "${propgroup.netconfig.domain}\${env.requestedBy}"'
+          
+          - 'powershell.exe -F C:\Temp\minion.ps1'
+          - 'C:\Temp\minion.exe /S /master=${propgroup.SaltStackConfiguration.masterAddress} /minion-name=${to_upper(self.resourceName)}'
+          - 'powershell.exe Start-Sleep -s 30'
+          - 'salt-call grains.set vravm true'
+          - '${input.install7zip == true ? "salt-call state.apply 7zipOnWin" : "echo null"}'
+
+          - 'powershell.exe Start-Sleep -s 60'
+          - 'powershell.exe New-NetFirewallRule -DisplayName vRA_Inbound_Rule -Direction Inbound -LocalPort ${input.inbound} -Protocol TCP -Action Allow'
+          - 'powershell.exe New-NetFirewallRule -DisplayName vRA_Outbound_Rule -Direction Outbound -LocalPort ${input.outbound} -Protocol TCP -Action Allow'
+  NET:
+    type: Cloud.Network
+    properties:
+      networkType: existing
+      constraints:
+        - tag: net:${input.env}
