@@ -1,0 +1,74 @@
+formatVersion: 1
+inputs:
+  dbengine:
+    type: string
+  dbversion:
+    type: string
+  replicamode:
+    type: string
+  topology:
+    type: string
+  databaseName:
+    type: string
+  adminUsername:
+    type: string
+  infraPolicy:
+    type: string
+  storagePolicy:
+    type: string
+  vmClass:
+    type: string
+  deploymentName:
+    type: string
+  storageSpace:
+    type: number
+  enableBackups:
+    type: boolean
+  backupLocation:
+    type: string
+    default: unset
+  backupRetentionDays:
+    type: number
+  enableMaintenanceWindow:
+    type: boolean
+  maintenanceDayOfWeek:
+    type: string
+  maintenanceWindowHours:
+    type: string
+  maintenanceWindowMins:
+    type: string
+  maintenanceDuration:
+    type: string
+  enableDbOptions:
+    type: boolean
+  dbOptions:
+    type: array
+    items:
+      type: string
+    default: []
+resources:
+  Custom_DSMDB_1:
+    type: Custom.DSMDB
+    properties:
+      deploymentName: ${input.deploymentName}
+      dbengine: ${input.dbengine}
+      dbversion: ${input.dbversion}
+      replicamode: ${input.replicamode}
+      topology: ${input.topology}
+      databaseName: ${input.databaseName}
+      adminUsername: ${input.adminUsername}
+      infraPolicy: ${input.infraPolicy}
+      storagePolicy: ${input.storagePolicy}
+      vmClass: ${input.vmClass}
+      storageSpace: ${input.storageSpace}
+      enableBackups: ${input.enableBackups}
+      backupLocation: ${input.backupLocation}
+      backupRetentionDays: ${input.backupRetentionDays}
+      enableMaintenanceWindow: ${input.enableMaintenanceWindow}
+      maintenanceDayOfWeek: ${input.maintenanceDayOfWeek}
+      maintenanceWindowHours: ${input.maintenanceWindowHours}
+      maintenanceWindowMins: ${input.maintenanceWindowMins}
+      maintenanceDuration: ${input.maintenanceDuration}
+      enableDbOptions: ${input.enableDbOptions}
+      dbOptions: ${input.dbOptions}
+      ariaProject: ${env.projectName}
